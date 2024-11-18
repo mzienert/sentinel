@@ -18,11 +18,11 @@ class App {
 
     private initializeRoutes(): void {
         // Add root route for testing
-        this.server.get('/', async (req: HyperExpress.Request, res: HyperExpress.Response) => {
+        this.server.get('/', async (_req: HyperExpress.Request, res: HyperExpress.Response) => {
             await res.send('Server is running!');
         });
 
-        this.server.get('/hello', async (req: HyperExpress.Request, res: HyperExpress.Response) => {
+        this.server.get('/hello', async (_req: HyperExpress.Request, res: HyperExpress.Response) => {
             const response: HelloResponse = {
                 message: 'Hello from HyperExpress!',
                 timestamp: new Date().toISOString()
@@ -32,7 +32,7 @@ class App {
         });
 
         // Set up global error handler
-        this.server.set_error_handler((req, res, error) => {
+        this.server.set_error_handler((_req, res, error) => {
             console.error('Error:', error);
             return res.status(500).json({
                 status: 500,
