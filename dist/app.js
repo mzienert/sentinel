@@ -4,10 +4,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const hyper_express_1 = __importDefault(require("hyper-express"));
+const CoinbaseWebSocket_1 = require("./websocket/CoinbaseWebSocket");
 class App {
     constructor(port = 3000) {
         this.server = new hyper_express_1.default.Server();
         this.port = port;
+        this.wsClient = CoinbaseWebSocket_1.CoinbaseWebSocket.getInstance();
         this.initializeRoutes();
     }
     initializeRoutes() {
@@ -20,6 +22,12 @@ class App {
                 timestamp: new Date().toISOString()
             };
             await res.json(response);
+        });
+        this.server.get('/ws-status', async (_req, res) => {
+            await res.json({
+                status: 'WebSocket connection active',
+                timestamp: new Date().toISOString()
+            });
         });
         this.server.set_error_handler((_req, res, error) => {
             console.error('Error:', error);
@@ -41,6 +49,8 @@ class App {
             await this.server.listen(this.port);
             console.log(`Server is running at http://localhost:${this.port}`);
             console.log(`Try: http://localhost:${this.port}/hello`);
+            await this.wsClient.connect();
+            console.log('WebSocket client initialized');
         }
         catch (error) {
             console.error('Failed to start server:', error);
@@ -49,8 +59,10 @@ class App {
     }
     async stop() {
         try {
+            this.wsClient.disconnect();
+            console.log('WebSocket connection closed');
             await this.server.close();
-            console.log('Server stopped');
+            console.log('HTTP Server stopped');
         }
         catch (error) {
             console.error('Error while stopping server:', error);

@@ -1,6 +1,4 @@
-// src/websocket/CoinbaseWebSocket.ts
 import WebSocket from 'ws';
-import { EventEmitter } from 'events';
 import { Kline } from '../types/kline';
 
 export class CoinbaseWebSocket {
