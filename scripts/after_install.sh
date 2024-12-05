@@ -8,6 +8,9 @@ export NVM_DIR="/home/ec2-user/.nvm"
 # Install dependencies
 npm install
 
+# Run build
+npm run build
+
 # Create logs directory
 mkdir -p dist/logs
 chmod 755 dist/logs
