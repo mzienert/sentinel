@@ -29,3 +29,6 @@ sudo chmod 777 dist/logs/error.log
 sudo chmod 777 dist/logs/out.log
 sudo chown ec2-user:ec2-user dist/logs/error.log
 sudo chown ec2-user:ec2-user dist/logs/out.log
+
+# Allow Node.js to bind to port 80
+sudo setcap 'cap_net_bind_service=+ep' $(which node)
