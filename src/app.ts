@@ -1,5 +1,6 @@
 // src/app.ts
 import HyperExpress from 'hyper-express';
+import { CoinbaseWebSocket } from './websocket/CoinbaseWebSocket';
 
 interface HelloResponse {
     message: string;
@@ -9,17 +10,16 @@ interface HelloResponse {
 class App {
     private server: HyperExpress.Server;
     private readonly port: number;
-    private readonly host: string;
+    private wsClient: CoinbaseWebSocket;
 
-    constructor(port: number = Number(process.env.PORT) || 3000) {
+    constructor(port: number = 3000) {
         this.server = new HyperExpress.Server();
         this.port = port;
-        this.host = '0.0.0.0';
+        this.wsClient = CoinbaseWebSocket.getInstance();
         this.initializeRoutes();
     }
 
     private initializeRoutes(): void {
-        // Add root route for testing
         this.server.get('/', async (_req: HyperExpress.Request, res: HyperExpress.Response) => {
             await res.send('Server is running!');
         });
@@ -31,6 +31,14 @@ class App {
             };
             
             await res.json(response);
+        });
+
+        // WebSocket status endpoint
+        this.server.get('/ws-status', async (_req: HyperExpress.Request, res: HyperExpress.Response) => {
+            await res.json({
+                status: 'WebSocket connection active',
+                timestamp: new Date().toISOString()
+            });
         });
 
         // Set up global error handler
@@ -54,9 +62,14 @@ class App {
 
     public async start(): Promise<void> {
         try {
-            await this.server.listen(this.port, this.host);
-            console.log(`Server is running at http://${this.host}:${this.port}`);
-            console.log(`Try: http://${this.host}:${this.port}/hello`);
+            // Start the HTTP server
+            await this.server.listen(this.port);
+            console.log(`Server is running at http://localhost:${this.port}`);
+            console.log(`Try: http://localhost:${this.port}/hello`);
+
+            // Start the WebSocket connection
+            await this.wsClient.connect();
+            console.log('WebSocket client initialized');
         } catch (error) {
             console.error('Failed to start server:', error);
             process.exit(1);
@@ -65,8 +78,13 @@ class App {
 
     public async stop(): Promise<void> {
         try {
+            // Disconnect WebSocket
+            this.wsClient.disconnect();
+            console.log('WebSocket connection closed');
+
+            // Stop HTTP server
             await this.server.close();
-            console.log('Server stopped');
+            console.log('HTTP Server stopped');
         } catch (error) {
             console.error('Error while stopping server:', error);
             process.exit(1);
