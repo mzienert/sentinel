@@ -1,15 +1,17 @@
-#!/bin/bash
-cd /home/ec2-user/app
-
-# Set up NVM environment
-export NVM_DIR="/home/ec2-user/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-# Install dependencies
-npm install
+# Show tsconfig.json content if it exists
+if [ -f tsconfig.json ]; then
+    echo "tsconfig.json content:"
+    cat tsconfig.json
+else
+    echo "tsconfig.json not found!"
+fi
 
 # Run build
+echo "Running build..."
 npm run build
+
+echo "Listing dist directory after build:"
+ls -la dist/
 
 # Create logs directory
 mkdir -p dist/logs
@@ -26,3 +28,6 @@ chmod 644 dist/logs/error.log
 chmod 644 dist/logs/out.log
 chown ec2-user:ec2-user dist/logs/error.log
 chown ec2-user:ec2-user dist/logs/out.log
+
+echo "Final directory structure:"
+find . -type f -o -type d
