@@ -9,10 +9,12 @@ interface HelloResponse {
 class App {
     private server: HyperExpress.Server;
     private readonly port: number;
+    private readonly host: string;
 
-    constructor(port: number = 3000) {
+    constructor(port: number = Number(process.env.PORT) || 3000) {
         this.server = new HyperExpress.Server();
         this.port = port;
+        this.host = '0.0.0.0';
         this.initializeRoutes();
     }
 
@@ -52,9 +54,9 @@ class App {
 
     public async start(): Promise<void> {
         try {
-            await this.server.listen(this.port);
-            console.log(`Server is running at http://localhost:${this.port}`);
-            console.log(`Try: http://localhost:${this.port}/hello`);
+            await this.server.listen(this.port, this.host);
+            console.log(`Server is running at http://${this.host}:${this.port}`);
+            console.log(`Try: http://${this.host}:${this.port}/hello`);
         } catch (error) {
             console.error('Failed to start server:', error);
             process.exit(1);
