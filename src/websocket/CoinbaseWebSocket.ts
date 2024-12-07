@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
 import { Kline } from '../types/kline';
+import { KlineService } from '@services/KlineService';
 
 export class CoinbaseWebSocket {
     private static instance: CoinbaseWebSocket;
@@ -12,8 +13,12 @@ export class CoinbaseWebSocket {
     private klineStartTime = 0;
     private klines: Kline[] = [];
     private readonly MAX_KLINES = 50;
+    private klineService: KlineService;
 
-    private constructor() {}
+
+    private constructor() {
+        this.klineService = new KlineService();
+    }
 
     public static getInstance(): CoinbaseWebSocket {
         if (!CoinbaseWebSocket.instance) {
@@ -77,7 +82,7 @@ export class CoinbaseWebSocket {
         }
     }
 
-    private handleTickerUpdate(data: any): void {
+    private async handleTickerUpdate(data: any): void {
         const price = parseFloat(data.price);
         const size = parseFloat(data.last_size);
         const time = new Date(data.time).getTime();
@@ -85,9 +90,25 @@ export class CoinbaseWebSocket {
         if (!this.currentKline || time >= this.klineStartTime + 60000) {
             // If there's a current kline, it's complete, so add it to the klines array
             if (this.currentKline) {
-                this.currentKline.timestamp = this.klineStartTime;
-                this.klines.unshift(this.currentKline);
-                this.logKline(this.currentKline);
+                const completeKline: Kline = {
+                    ...this.currentKline,
+                    symbol: 'BTC-USD',
+                    interval: '1m',
+                    openTime: this.klineStartTime,
+                    closeTime: this.klineStartTime + 60000,
+                    trades: 1  // You might want to track actual trade count
+                };
+
+                this.klines.unshift(completeKline);
+                this.logKline(completeKline);
+                
+                // Save to DynamoDB
+                try {
+                    await this.klineService.saveKline(completeKline);
+                    console.log(`Successfully saved kline to DynamoDB for ${completeKline.symbol} at ${new Date(completeKline.openTime).toISOString()}`);
+                } catch (error) {
+                    console.error('Failed to save kline to DynamoDB:', error);
+                }
                 
                 if (this.klines.length > this.MAX_KLINES) {
                     this.klines.pop();
@@ -97,12 +118,16 @@ export class CoinbaseWebSocket {
             // Start a new kline
             this.klineStartTime = Math.floor(time / 60000) * 60000;
             this.currentKline = {
+                symbol: 'BTC-USD',
+                interval: '1m',
+                openTime: this.klineStartTime,
+                closeTime: this.klineStartTime + 60000,
                 open: price,
                 high: price,
                 low: price,
                 close: price,
                 volume: size,
-                timestamp: this.klineStartTime
+                trades: 1
             };
             console.log(`Started new kline at ${new Date(this.klineStartTime).toISOString()}`);
         } else {
@@ -112,20 +137,25 @@ export class CoinbaseWebSocket {
                 this.currentKline.low = Math.min(this.currentKline.low, price);
                 this.currentKline.close = price;
                 this.currentKline.volume += size;
+                this.currentKline.trades = (this.currentKline.trades || 0) + 1;
             }
         }
     }
 
     private logKline(kline: Kline): void {
         console.log(`
-Completed Kline:
-  Timestamp: ${new Date(kline.timestamp!).toISOString()}
-  Open: ${kline.open.toFixed(2)}
-  High: ${kline.high.toFixed(2)}
-  Low: ${kline.low.toFixed(2)}
-  Close: ${kline.close.toFixed(2)}
-  Volume: ${kline.volume.toFixed(8)}
-Current Kline Array Length: ${this.klines.length}/${this.MAX_KLINES}
+            Completed Kline:
+            Symbol: ${kline.symbol}
+            Interval: ${kline.interval}
+            OpenTime: ${new Date(kline.openTime).toISOString()}
+            CloseTime: ${new Date(kline.closeTime).toISOString()}
+            Open: ${kline.open.toFixed(2)}
+            High: ${kline.high.toFixed(2)}
+            Low: ${kline.low.toFixed(2)}
+            Close: ${kline.close.toFixed(2)}
+            Volume: ${kline.volume.toFixed(8)}
+            Trades: ${kline.trades}
+            Current Kline Array Length: ${this.klines.length}/${this.MAX_KLINES}
         `);
     }
 
