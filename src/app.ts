@@ -1,16 +1,25 @@
 import { config } from 'dotenv';
 import { resolve } from 'path';
 
-// Load dotenv at the very top, before any other imports
-const result = config({ path: resolve(__dirname, '../.env') });
-
-if (result.error) {
-    console.error('Error loading .env file:', result.error);
-    process.exit(1);
+// Try to load .env file, but don't fail if it doesn't exist
+try {
+    const result = config({ path: resolve(__dirname, '../.env') });
+    if (result.parsed) {
+        console.log('Loaded environment variables from .env file');
+    }
+} catch (error) {
+    console.log('No .env file found, using process environment variables');
 }
 
-console.log('Loaded environment variables from:', resolve(__dirname, '../.env'));
-console.log('Dotenv load result:', result);
+// Validate and set required environment variables with fallbacks
+const PORT = process.env.PORT || 3000;
+const AWS_REGION = process.env.AWS_REGION || 'us-west-1';
+const DYNAMODB_TABLE = process.env.DYNAMODB_TABLE;
+
+if (!DYNAMODB_TABLE) {
+    console.error('DYNAMODB_TABLE environment variable must be set');
+    process.exit(1);
+}
 
 import HyperExpress from 'hyper-express';
 import { CoinbaseWebSocket } from './websocket/CoinbaseWebSocket';
@@ -27,14 +36,14 @@ class App {
     private wsClient: CoinbaseWebSocket;
     private isStarted: boolean = false;
 
-    private constructor(port: number = 3000) {
+    private constructor(port: number) {
         this.server = new HyperExpress.Server();
         this.port = port;
         this.wsClient = CoinbaseWebSocket.getInstance();
         this.initializeRoutes();
     }
 
-    public static getInstance(port: number = 3000): App {
+    public static getInstance(port: number = PORT): App {
         if (!App.instance) {
             App.instance = new App(port);
         }
@@ -58,7 +67,12 @@ class App {
         this.server.get('/ws-status', async (_req: HyperExpress.Request, res: HyperExpress.Response) => {
             await res.json({
                 status: 'WebSocket connection active',
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                config: {
+                    port: this.port,
+                    region: AWS_REGION,
+                    environment: process.env.NODE_ENV
+                }
             });
         });
 
@@ -87,7 +101,8 @@ class App {
 
         try {
             await this.server.listen(this.port);
-            console.log(`Server is running at http://localhost:${this.port}`);
+            console.log(`Server is running at http://localhost:${this.port} in ${process.env.NODE_ENV || 'development'} mode`);
+            console.log(`Region: ${AWS_REGION}, DynamoDB Table: ${DYNAMODB_TABLE}`);
             console.log(`Try: http://localhost:${this.port}/hello`);
 
             await this.wsClient.connect();
