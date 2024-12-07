@@ -11,8 +11,8 @@ try {
     console.log('No .env file found, using process environment variables');
 }
 
-// Validate and set required environment variables with fallbacks
-const PORT = process.env.PORT || 3000;
+// Parse PORT to number and provide fallback
+const PORT = parseInt(process.env.PORT || '3000', 10);
 const AWS_REGION = process.env.AWS_REGION || 'us-west-1';
 const DYNAMODB_TABLE = process.env.DYNAMODB_TABLE;
 
