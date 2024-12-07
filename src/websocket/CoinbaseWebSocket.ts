@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 import { Kline } from '../types/kline';
-import { KlineService } from '@services/KlineService';
+import { KlineService } from '../services/KlineService';
 
 export class CoinbaseWebSocket {
     private static instance: CoinbaseWebSocket;
