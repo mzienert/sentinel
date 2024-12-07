@@ -1,4 +1,17 @@
-// src/app.ts
+import { config } from 'dotenv';
+import { resolve } from 'path';
+
+// Load dotenv at the very top, before any other imports
+const result = config({ path: resolve(__dirname, '../.env') });
+
+if (result.error) {
+    console.error('Error loading .env file:', result.error);
+    process.exit(1);
+}
+
+console.log('Loaded environment variables from:', resolve(__dirname, '../.env'));
+console.log('Dotenv load result:', result);
+
 import HyperExpress from 'hyper-express';
 import { CoinbaseWebSocket } from './websocket/CoinbaseWebSocket';
 
@@ -8,15 +21,24 @@ interface HelloResponse {
 }
 
 class App {
+    private static instance: App | null = null;
     private server: HyperExpress.Server;
     private readonly port: number;
     private wsClient: CoinbaseWebSocket;
+    private isStarted: boolean = false;
 
-    constructor(port: number = 3000) {
+    private constructor(port: number = 3000) {
         this.server = new HyperExpress.Server();
         this.port = port;
         this.wsClient = CoinbaseWebSocket.getInstance();
         this.initializeRoutes();
+    }
+
+    public static getInstance(port: number = 3000): App {
+        if (!App.instance) {
+            App.instance = new App(port);
+        }
+        return App.instance;
     }
 
     private initializeRoutes(): void {
@@ -33,7 +55,6 @@ class App {
             await res.json(response);
         });
 
-        // WebSocket status endpoint
         this.server.get('/ws-status', async (_req: HyperExpress.Request, res: HyperExpress.Response) => {
             await res.json({
                 status: 'WebSocket connection active',
@@ -41,7 +62,6 @@ class App {
             });
         });
 
-        // Set up global error handler
         this.server.set_error_handler((_req, res, error) => {
             console.error('Error:', error);
             return res.status(500).json({
@@ -50,7 +70,6 @@ class App {
             });
         });
 
-        // Set up not found handler
         this.server.set_not_found_handler((req, res) => {
             return res.status(404).json({
                 status: 404,
@@ -61,15 +80,20 @@ class App {
     }
 
     public async start(): Promise<void> {
+        if (this.isStarted) {
+            console.log('Server is already running');
+            return;
+        }
+
         try {
-            // Start the HTTP server
             await this.server.listen(this.port);
             console.log(`Server is running at http://localhost:${this.port}`);
             console.log(`Try: http://localhost:${this.port}/hello`);
 
-            // Start the WebSocket connection
             await this.wsClient.connect();
             console.log('WebSocket client initialized');
+            
+            this.isStarted = true;
         } catch (error) {
             console.error('Failed to start server:', error);
             process.exit(1);
@@ -77,14 +101,18 @@ class App {
     }
 
     public async stop(): Promise<void> {
+        if (!this.isStarted) {
+            return;
+        }
+
         try {
-            // Disconnect WebSocket
             this.wsClient.disconnect();
             console.log('WebSocket connection closed');
 
-            // Stop HTTP server
             await this.server.close();
             console.log('HTTP Server stopped');
+            
+            this.isStarted = false;
         } catch (error) {
             console.error('Error while stopping server:', error);
             process.exit(1);
@@ -92,8 +120,8 @@ class App {
     }
 }
 
-// Create and start server instance
-const app = new App();
+// Get the singleton instance and start it
+const app = App.getInstance();
 app.start();
 
 // Handle graceful shutdown
