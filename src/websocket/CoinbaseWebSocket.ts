@@ -82,27 +82,29 @@ export class CoinbaseWebSocket {
         }
     }
 
-    private async handleTickerUpdate(data: any): void {
+    private async handleTickerUpdate(data: any): Promise<void> {
         const price = parseFloat(data.price);
         const size = parseFloat(data.last_size);
         const time = new Date(data.time).getTime();
 
         if (!this.currentKline || time >= this.klineStartTime + 60000) {
-            // If there's a current kline, it's complete, so add it to the klines array
             if (this.currentKline) {
                 const completeKline: Kline = {
-                    ...this.currentKline,
                     symbol: 'BTC-USD',
                     interval: '1m',
                     openTime: this.klineStartTime,
                     closeTime: this.klineStartTime + 60000,
-                    trades: 1  // You might want to track actual trade count
+                    open: this.currentKline.open,
+                    high: this.currentKline.high,
+                    low: this.currentKline.low,
+                    close: this.currentKline.close,
+                    volume: this.currentKline.volume,
+                    trades: this.currentKline.trades
                 };
 
                 this.klines.unshift(completeKline);
                 this.logKline(completeKline);
                 
-                // Save to DynamoDB
                 try {
                     await this.klineService.saveKline(completeKline);
                     console.log(`Successfully saved kline to DynamoDB for ${completeKline.symbol} at ${new Date(completeKline.openTime).toISOString()}`);
@@ -115,7 +117,6 @@ export class CoinbaseWebSocket {
                 }
             }
 
-            // Start a new kline
             this.klineStartTime = Math.floor(time / 60000) * 60000;
             this.currentKline = {
                 symbol: 'BTC-USD',
@@ -131,7 +132,6 @@ export class CoinbaseWebSocket {
             };
             console.log(`Started new kline at ${new Date(this.klineStartTime).toISOString()}`);
         } else {
-            // Update the current kline
             if (this.currentKline) {
                 this.currentKline.high = Math.max(this.currentKline.high, price);
                 this.currentKline.low = Math.min(this.currentKline.low, price);

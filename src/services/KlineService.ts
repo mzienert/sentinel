@@ -1,18 +1,24 @@
-// src/services/KlineService.ts
 import { DynamoDB } from 'aws-sdk';
 import { v4 as uuidv4 } from 'uuid';
 
-interface Kline {
+export interface Kline {
     symbol: string;
     interval: string;
     openTime: number;
     closeTime: number;
-    open: string;
-    high: string;
-    low: string;
-    close: string;
-    volume: string;
-    trades: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+    trades?: number;
+}
+
+interface DynamoDBKline extends Kline {
+    id: string;
+    type: 'KLINE';
+    timestamp: number;
+    ttl: number;
 }
 
 export class KlineService {
@@ -30,19 +36,10 @@ export class KlineService {
         const timestamp = Date.now();
         const ttl = Math.floor(timestamp / 1000) + (7 * 24 * 60 * 60); // 7 days TTL
 
-        const item = {
+        const item: DynamoDBKline = {
+            ...kline,
             id: uuidv4(),
             type: 'KLINE',
-            symbol: kline.symbol,
-            interval: kline.interval,
-            openTime: kline.openTime,
-            closeTime: kline.closeTime,
-            open: kline.open,
-            high: kline.high,
-            low: kline.low,
-            close: kline.close,
-            volume: kline.volume,
-            trades: kline.trades,
             timestamp,
             ttl
         };
@@ -58,10 +55,10 @@ export class KlineService {
         }
     }
 
-    async getKlinesBySymbol(symbol: string, startTime?: number, endTime?: number): Promise<any[]> {
+    async getKlinesBySymbol(symbol: string, startTime?: number, endTime?: number): Promise<DynamoDBKline[]> {
         const params: DynamoDB.DocumentClient.QueryInput = {
             TableName: this.tableName,
-            IndexName: 'symbol-timestamp-index', // You'll need to create this GSI
+            IndexName: 'symbol-timestamp-index',
             KeyConditionExpression: 'symbol = :symbol',
             FilterExpression: 'type = :type',
             ExpressionAttributeValues: {
@@ -71,14 +68,20 @@ export class KlineService {
         };
 
         if (startTime && endTime) {
-            params.KeyConditionExpression += ' AND timestamp BETWEEN :startTime AND :endTime';
-            params.ExpressionAttributeValues[':startTime'] = startTime;
-            params.ExpressionAttributeValues[':endTime'] = endTime;
+            params.KeyConditionExpression += ' AND #ts BETWEEN :startTime AND :endTime';
+            params.ExpressionAttributeNames = {
+                '#ts': 'timestamp'
+            };
+            params.ExpressionAttributeValues = {
+                ...params.ExpressionAttributeValues,
+                ':startTime': startTime,
+                ':endTime': endTime
+            };
         }
 
         try {
             const result = await this.dynamoDB.query(params).promise();
-            return result.Items || [];
+            return (result.Items || []) as DynamoDBKline[];
         } catch (error) {
             console.error('Error querying klines from DynamoDB:', error);
             throw new Error('Failed to retrieve kline data');

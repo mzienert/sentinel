@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CoinbaseWebSocket = void 0;
 const ws_1 = __importDefault(require("ws"));
+const KlineService_1 = require("../services/KlineService");
 class CoinbaseWebSocket {
     constructor() {
         this.WEBSOCKET_URI = 'wss://ws-feed.exchange.coinbase.com';
@@ -16,6 +17,7 @@ class CoinbaseWebSocket {
         this.klineStartTime = 0;
         this.klines = [];
         this.MAX_KLINES = 50;
+        this.klineService = new KlineService_1.KlineService();
     }
     static getInstance() {
         if (!CoinbaseWebSocket.instance) {
@@ -72,27 +74,49 @@ class CoinbaseWebSocket {
             console.error('Raw message:', data);
         }
     }
-    handleTickerUpdate(data) {
+    async handleTickerUpdate(data) {
         const price = parseFloat(data.price);
         const size = parseFloat(data.last_size);
         const time = new Date(data.time).getTime();
         if (!this.currentKline || time >= this.klineStartTime + 60000) {
             if (this.currentKline) {
-                this.currentKline.timestamp = this.klineStartTime;
-                this.klines.unshift(this.currentKline);
-                this.logKline(this.currentKline);
+                const completeKline = {
+                    symbol: 'BTC-USD',
+                    interval: '1m',
+                    openTime: this.klineStartTime,
+                    closeTime: this.klineStartTime + 60000,
+                    open: this.currentKline.open,
+                    high: this.currentKline.high,
+                    low: this.currentKline.low,
+                    close: this.currentKline.close,
+                    volume: this.currentKline.volume,
+                    trades: this.currentKline.trades
+                };
+                this.klines.unshift(completeKline);
+                this.logKline(completeKline);
+                try {
+                    await this.klineService.saveKline(completeKline);
+                    console.log(`Successfully saved kline to DynamoDB for ${completeKline.symbol} at ${new Date(completeKline.openTime).toISOString()}`);
+                }
+                catch (error) {
+                    console.error('Failed to save kline to DynamoDB:', error);
+                }
                 if (this.klines.length > this.MAX_KLINES) {
                     this.klines.pop();
                 }
             }
             this.klineStartTime = Math.floor(time / 60000) * 60000;
             this.currentKline = {
+                symbol: 'BTC-USD',
+                interval: '1m',
+                openTime: this.klineStartTime,
+                closeTime: this.klineStartTime + 60000,
                 open: price,
                 high: price,
                 low: price,
                 close: price,
                 volume: size,
-                timestamp: this.klineStartTime
+                trades: 1
             };
             console.log(`Started new kline at ${new Date(this.klineStartTime).toISOString()}`);
         }
@@ -102,19 +126,24 @@ class CoinbaseWebSocket {
                 this.currentKline.low = Math.min(this.currentKline.low, price);
                 this.currentKline.close = price;
                 this.currentKline.volume += size;
+                this.currentKline.trades = (this.currentKline.trades || 0) + 1;
             }
         }
     }
     logKline(kline) {
         console.log(`
-Completed Kline:
-  Timestamp: ${new Date(kline.timestamp).toISOString()}
-  Open: ${kline.open.toFixed(2)}
-  High: ${kline.high.toFixed(2)}
-  Low: ${kline.low.toFixed(2)}
-  Close: ${kline.close.toFixed(2)}
-  Volume: ${kline.volume.toFixed(8)}
-Current Kline Array Length: ${this.klines.length}/${this.MAX_KLINES}
+            Completed Kline:
+            Symbol: ${kline.symbol}
+            Interval: ${kline.interval}
+            OpenTime: ${new Date(kline.openTime).toISOString()}
+            CloseTime: ${new Date(kline.closeTime).toISOString()}
+            Open: ${kline.open.toFixed(2)}
+            High: ${kline.high.toFixed(2)}
+            Low: ${kline.low.toFixed(2)}
+            Close: ${kline.close.toFixed(2)}
+            Volume: ${kline.volume.toFixed(8)}
+            Trades: ${kline.trades}
+            Current Kline Array Length: ${this.klines.length}/${this.MAX_KLINES}
         `);
     }
     handleError(error) {
