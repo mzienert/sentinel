@@ -1,16 +1,17 @@
 {
-    "name": "@sentinel/hello-world-lambda",
-    "version": "1.0.0",
-    "description": "Hello World Lambda function",
-    "main": "dist/index.js",
-    "scripts": {
-      "build": "tsc",
-      "test": "jest"
-    },
-    "dependencies": {
-      "@types/aws-lambda": "^8.10.130"
-    },
-    "devDependencies": {
-      "typescript": "^5.0.0"
-    }
+  "name": "@sentinel/hello-world-lambda",
+  "version": "1.0.0",
+  "description": "Hello World Lambda function",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@types/aws-lambda": "^8.10.130"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
   }
+}
