@@ -2,10 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
-const dynamoClient = new DynamoDBClient({
-    region: process.env.AWS_REGION || 'us-west-1'
-});
-
+const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 interface ErrorResponse {
@@ -14,17 +11,15 @@ interface ErrorResponse {
     error?: any;
 }
 
-const createResponse = (statusCode: number, body: any): APIGatewayProxyResult => {
-    return {
-        statusCode,
-        headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*', // Enable CORS
-            'Access-Control-Allow-Credentials': true
-        },
-        body: JSON.stringify(body)
-    };
-};
+const createResponse = (statusCode: number, body: any): APIGatewayProxyResult => ({
+    statusCode,
+    headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Credentials': true
+    },
+    body: JSON.stringify(body)
+});
 
 const handleError = (error: any): ErrorResponse => {
     console.error('Error:', error);
@@ -56,7 +51,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     try {
         const params = {
             TableName: process.env.DYNAMODB_TABLE || 'GalvitronTable',
-            IndexName: 'symbol-timestamp-index', // Using the GSI we saw in KlineService.ts
+            IndexName: 'symbol-timestamp-index',
             KeyConditionExpression: '#type = :type',
             ExpressionAttributeNames: {
                 '#type': 'type'
@@ -64,7 +59,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             ExpressionAttributeValues: {
                 ':type': 'KLINE'
             },
-            ScanIndexForward: false, // This will sort in descending order (newest first)
+            ScanIndexForward: false,
             Limit: 50
         };
 
