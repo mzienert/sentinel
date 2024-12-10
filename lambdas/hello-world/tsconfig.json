@@ -5,10 +5,11 @@
     "lib": ["es2020"],
     "strict": true,
     "outDir": "./dist",
-    "rootDir": "./",
+    "rootDir": "./src",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }
