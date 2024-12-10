@@ -1,4 +1,4 @@
-import type { APIGatewayProxyHandler } from 'aws-lambda';
+import { APIGatewayProxyHandler } from 'aws-lambda';
 
 export const handler: APIGatewayProxyHandler = async () => {
   const now = new Date();
