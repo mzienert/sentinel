@@ -1,17 +1,10 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, QueryCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
-interface ErrorResponse {
-    statusCode: number;
-    message: string;
-    error?: any;
-}
-
-const createResponse = (statusCode: number, body: any): APIGatewayProxyResult => ({
+const createResponse = (statusCode, body) => ({
     statusCode,
     headers: {
         'Content-Type': 'application/json',
@@ -21,7 +14,7 @@ const createResponse = (statusCode: number, body: any): APIGatewayProxyResult =>
     body: JSON.stringify(body)
 });
 
-const handleError = (error: any): ErrorResponse => {
+const handleError = (error) => {
     console.error('Error:', error);
     
     if (error.name === 'ResourceNotFoundException') {
@@ -45,10 +38,9 @@ const handleError = (error: any): ErrorResponse => {
     };
 };
 
-exports.handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    console.log('Event:', JSON.stringify(event, null, 2));
-    
+const queryTable = async () => {
     try {
+        // Try using the GSI first
         const params = {
             TableName: process.env.DYNAMODB_TABLE || 'GalvitronTable',
             IndexName: 'symbol-timestamp-index',
@@ -64,12 +56,41 @@ exports.handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyRe
         };
 
         const result = await docClient.send(new QueryCommand(params));
+        return result.Items || [];
+    } catch (error) {
+        // If GSI is backfilling, fall back to scanning the main table
+        if (error.message && error.message.includes('backfilling')) {
+            console.log('GSI is backfilling, falling back to table scan');
+            const scanParams = {
+                TableName: process.env.DYNAMODB_TABLE || 'GalvitronTable',
+                FilterExpression: '#type = :type',
+                ExpressionAttributeNames: {
+                    '#type': 'type'
+                },
+                ExpressionAttributeValues: {
+                    ':type': 'KLINE'
+                },
+                Limit: 50
+            };
+            
+            const scanResult = await docClient.send(new ScanCommand(scanParams));
+            return scanResult.Items || [];
+        }
+        throw error;
+    }
+};
+
+exports.handler = async (event) => {
+    console.log('Event:', JSON.stringify(event, null, 2));
+    
+    try {
+        const items = await queryTable();
         
         const response = {
             message: 'Successfully retrieved records',
             timestamp: new Date().toISOString(),
-            count: result.Items?.length || 0,
-            items: result.Items || []
+            count: items.length,
+            items: items
         };
 
         return createResponse(200, response);
