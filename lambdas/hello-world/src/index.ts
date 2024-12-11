@@ -45,7 +45,7 @@ const handleError = (error: any): ErrorResponse => {
     };
 };
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+exports.handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     console.log('Event:', JSON.stringify(event, null, 2));
     
     try {

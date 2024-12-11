@@ -1,7 +1,6 @@
 {
   "name": "hello-world-lambda",
   "version": "1.0.0",
-  "type": "module",
   "private": true,
   "scripts": {
     "build": "tsc"
