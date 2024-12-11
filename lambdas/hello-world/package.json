@@ -2,10 +2,9 @@
   "name": "hello-world-lambda",
   "version": "1.0.0",
   "type": "module",
-  "main": "dist/index.js",
+  "private": true,
   "scripts": {
-    "build": "tsc",
-    "postbuild": "cp package.json dist/"
+    "build": "tsc"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.485.0",
