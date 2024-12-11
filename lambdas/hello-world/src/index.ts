@@ -1,92 +1,101 @@
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, QueryCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
-const createResponse = (statusCode, body) => ({
-    statusCode,
-    headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Credentials': true
-    },
-    body: JSON.stringify(body)
-});
+interface ResponseBody {
+    [key: string]: unknown;
+}
 
-const handleError = (error) => {
-    console.error('Error:', error);
+const createResponse = (statusCode: number, body: ResponseBody): APIGatewayProxyResult => {
+    console.log('Creating response:', { statusCode, body });
+    return {
+        statusCode,
+        headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Credentials': true
+        },
+        body: JSON.stringify(body)
+    };
+};
+
+interface ErrorResponse {
+    statusCode: number;
+    message: string;
+    error?: string;
+}
+
+const handleError = (error: unknown): ErrorResponse => {
+    console.error('Processing error:', error);
     
-    if (error.name === 'ResourceNotFoundException') {
+    if (error instanceof Error) {
+        if (error.name === 'ResourceNotFoundException') {
+            return {
+                statusCode: 404,
+                message: 'DynamoDB table not found'
+            };
+        }
+        
+        if (error.name === 'ValidationException') {
+            return {
+                statusCode: 400,
+                message: 'Invalid query parameters'
+            };
+        }
+        
         return {
-            statusCode: 404,
-            message: 'DynamoDB table not found'
-        };
-    }
-    
-    if (error.name === 'ValidationException') {
-        return {
-            statusCode: 400,
-            message: 'Invalid query parameters'
+            statusCode: 500,
+            message: 'Internal server error',
+            error: error.message
         };
     }
     
     return {
         statusCode: 500,
-        message: 'Internal server error',
-        error: error.message
+        message: 'Unknown error occurred',
+        error: String(error)
     };
 };
 
-const queryTable = async () => {
+const queryTable = async (): Promise<any[]> => {
     try {
-        // Try using the GSI first
-        const params = {
+        console.log('Starting table query');
+        const scanParams = {
             TableName: process.env.DYNAMODB_TABLE || 'GalvitronTable',
-            IndexName: 'symbol-timestamp-index',
-            KeyConditionExpression: '#type = :type',
+            FilterExpression: '#type = :type',
             ExpressionAttributeNames: {
                 '#type': 'type'
             },
             ExpressionAttributeValues: {
                 ':type': 'KLINE'
             },
-            ScanIndexForward: false,
             Limit: 50
         };
 
-        const result = await docClient.send(new QueryCommand(params));
-        return result.Items || [];
+        console.log('Scanning table with params:', scanParams);
+        const scanResult = await docClient.send(new ScanCommand(scanParams));
+        console.log('Scan result:', scanResult);
+        return scanResult.Items || [];
     } catch (error) {
-        // If GSI is backfilling, fall back to scanning the main table
-        if (error.message && error.message.includes('backfilling')) {
-            console.log('GSI is backfilling, falling back to table scan');
-            const scanParams = {
-                TableName: process.env.DYNAMODB_TABLE || 'GalvitronTable',
-                FilterExpression: '#type = :type',
-                ExpressionAttributeNames: {
-                    '#type': 'type'
-                },
-                ExpressionAttributeValues: {
-                    ':type': 'KLINE'
-                },
-                Limit: 50
-            };
-            
-            const scanResult = await docClient.send(new ScanCommand(scanParams));
-            return scanResult.Items || [];
-        }
+        console.error('Error during queryTable:', error);
         throw error;
     }
 };
 
-exports.handler = async (event) => {
-    console.log('Event:', JSON.stringify(event, null, 2));
+export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    console.log('Lambda started. Environment:', {
+        NODE_ENV: process.env.NODE_ENV,
+        DYNAMODB_TABLE: process.env.DYNAMODB_TABLE,
+        AWS_REGION: process.env.AWS_REGION
+    });
     
     try {
         const items = await queryTable();
         
-        const response = {
+        const response: ResponseBody = {
             message: 'Successfully retrieved records',
             timestamp: new Date().toISOString(),
             count: items.length,
@@ -95,7 +104,15 @@ exports.handler = async (event) => {
 
         return createResponse(200, response);
     } catch (error) {
+        console.error('Handler caught error:', error);
         const errorResponse = handleError(error);
-        return createResponse(errorResponse.statusCode, errorResponse);
+        const responseBody: ResponseBody = {
+            message: errorResponse.message,
+            statusCode: errorResponse.statusCode
+        };
+        if (errorResponse.error) {
+            responseBody.error = errorResponse.error;
+        }
+        return createResponse(errorResponse.statusCode, responseBody);
     }
 };
