@@ -1,6 +1,6 @@
-import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, QueryCommand } = require('@aws-sdk/lib-dynamodb');
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -45,7 +45,7 @@ const handleError = (error: any): ErrorResponse => {
     };
 };
 
-module.exports.handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     console.log('Event:', JSON.stringify(event, null, 2));
     
     try {

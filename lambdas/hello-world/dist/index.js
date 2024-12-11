@@ -1,9 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, QueryCommand } = require('@aws-sdk/lib-dynamodb');
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+exports.handler = void 0;
+const client_dynamodb_1 = require("@aws-sdk/client-dynamodb");
+const lib_dynamodb_1 = require("@aws-sdk/lib-dynamodb");
+const dynamoClient = new client_dynamodb_1.DynamoDBClient({});
+const docClient = lib_dynamodb_1.DynamoDBDocumentClient.from(dynamoClient);
 const createResponse = (statusCode, body) => ({
     statusCode,
     headers: {
@@ -33,7 +34,7 @@ const handleError = (error) => {
         error: error.message
     };
 };
-module.exports.handler = async (event) => {
+const handler = async (event) => {
     console.log('Event:', JSON.stringify(event, null, 2));
     try {
         const params = {
@@ -49,7 +50,7 @@ module.exports.handler = async (event) => {
             ScanIndexForward: false,
             Limit: 50
         };
-        const result = await docClient.send(new QueryCommand(params));
+        const result = await docClient.send(new lib_dynamodb_1.QueryCommand(params));
         const response = {
             message: 'Successfully retrieved records',
             timestamp: new Date().toISOString(),
@@ -63,3 +64,4 @@ module.exports.handler = async (event) => {
         return createResponse(errorResponse.statusCode, errorResponse);
     }
 };
+exports.handler = handler;
