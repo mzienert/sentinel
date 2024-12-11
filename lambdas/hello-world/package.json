@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Lambda function to fetch recent DynamoDB records",
   "main": "dist/index.js",
+  "type": "module",
   "scripts": {
     "build": "tsc",
     "test": "jest"
