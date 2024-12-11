@@ -1,12 +1,9 @@
 {
   "name": "hello-world-lambda",
   "version": "1.0.0",
-  "description": "Lambda function to fetch recent DynamoDB records",
-  "main": "dist/index.js",
-  "type": "module",
+  "private": true,
   "scripts": {
-    "build": "tsc",
-    "test": "jest"
+    "build": "tsc"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.485.0",

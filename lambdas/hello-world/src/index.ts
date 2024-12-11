@@ -1,4 +1,3 @@
-// src/index.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
@@ -46,8 +45,7 @@ const handleError = (error: any): ErrorResponse => {
     };
 };
 
-// Default export for the handler
-const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     console.log('Event:', JSON.stringify(event, null, 2));
     
     try {
@@ -80,5 +78,3 @@ const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResu
         return createResponse(errorResponse.statusCode, errorResponse);
     }
 };
-
-export default handler;
