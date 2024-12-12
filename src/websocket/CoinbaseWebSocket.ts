@@ -1,5 +1,5 @@
 import WebSocket from 'ws';
-import { Kline } from '../types/kline';
+import { BaseKline, ExchangeKline } from '../types/kline';
 import { KlineService } from '../services/KlineService';
 
 export class CoinbaseWebSocket {
@@ -9,13 +9,14 @@ export class CoinbaseWebSocket {
     private reconnectAttempts = 0;
     private readonly MAX_RECONNECT_ATTEMPTS = 5;
     private readonly RECONNECT_DELAY = 5000;
-    private currentKline: Kline | null = null;
+    private currentKline: BaseKline | null = null;
     private klineStartTime = 0;
-    private klines: Kline[] = [];
+    private klines: ExchangeKline[] = [];
     private readonly MAX_KLINES = 50;
     private klineService: KlineService;
     private lastTickTime = 0;
     private processingKline = false;
+    private readonly EXCHANGE = 'COINBASE';
 
     private constructor() {
         this.klineService = new KlineService();
@@ -74,7 +75,6 @@ export class CoinbaseWebSocket {
     private async processTickerUpdate(data: any): Promise<void> {
         const time = new Date(data.time).getTime();
         
-        // Skip if we're moving backwards in time or processing the same millisecond
         if (time <= this.lastTickTime) {
             return;
         }
@@ -84,7 +84,6 @@ export class CoinbaseWebSocket {
         const size = parseFloat(data.last_size);
         const currentMinute = Math.floor(time / 60000) * 60000;
 
-        // First tick of a new minute or first tick ever
         if (!this.currentKline || currentMinute > this.klineStartTime) {
             if (this.processingKline) {
                 console.log('[DEBUG] Waiting for previous kline completion');
@@ -94,35 +93,22 @@ export class CoinbaseWebSocket {
             try {
                 this.processingKline = true;
                 
-                // Complete previous kline if it exists
                 if (this.currentKline) {
                     console.log(`[DEBUG] Completing kline for ${new Date(this.klineStartTime).toISOString()}`);
                     
-                    const completeKline: Kline = {
-                        symbol: 'BTC-USD',
-                        interval: '1m',
-                        openTime: this.klineStartTime,
-                        closeTime: this.klineStartTime + 60000,
-                        open: this.currentKline.open,
-                        high: this.currentKline.high,
-                        low: this.currentKline.low,
-                        close: this.currentKline.close,
-                        volume: this.currentKline.volume,
-                        trades: this.currentKline.trades
+                    const completeKline: ExchangeKline = {
+                        ...this.currentKline,
+                        exchange: this.EXCHANGE
                     };
 
-                    // Add to local array
                     this.klines.unshift(completeKline);
                     if (this.klines.length > this.MAX_KLINES) {
                         this.klines.pop();
                     }
 
-                    // Save to DynamoDB
                     try {
                         await this.klineService.saveKline(completeKline);
-                        console.log(`Successfully saved kline to DynamoDB for ${completeKline.symbol} at ${new Date(completeKline.openTime).toISOString()}`);
-
-                        // Only log completed kline details after successful save
+                        console.log(`Successfully saved kline to DynamoDB for ${completeKline.exchange}:${completeKline.symbol} at ${new Date(completeKline.openTime).toISOString()}`);
                         this.logKline(completeKline);
                     } catch (error) {
                         if (error instanceof Error && error.name !== 'ConditionalCheckFailedException') {
@@ -150,7 +136,6 @@ export class CoinbaseWebSocket {
                 this.processingKline = false;
             }
         } else if (this.currentKline) {
-            // Update existing kline without logging
             this.currentKline.high = Math.max(this.currentKline.high, price);
             this.currentKline.low = Math.min(this.currentKline.low, price);
             this.currentKline.close = price;
@@ -159,9 +144,10 @@ export class CoinbaseWebSocket {
         }
     }
 
-    private logKline(kline: Kline): void {
+    private logKline(kline: ExchangeKline): void {
         console.log(`
             Completed Kline:
+            Exchange: ${kline.exchange}
             Symbol: ${kline.symbol}
             Interval: ${kline.interval}
             OpenTime: ${new Date(kline.openTime).toISOString()}
@@ -204,7 +190,7 @@ export class CoinbaseWebSocket {
         }
     }
 
-    public getKlines(): Kline[] {
+    public getKlines(): ExchangeKline[] {
         return [...this.klines];
     }
 }

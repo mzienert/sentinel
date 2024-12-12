@@ -17,6 +17,9 @@ class CoinbaseWebSocket {
         this.klineStartTime = 0;
         this.klines = [];
         this.MAX_KLINES = 50;
+        this.lastTickTime = 0;
+        this.processingKline = false;
+        this.EXCHANGE = 'COINBASE';
         this.klineService = new KlineService_1.KlineService();
     }
     static getInstance() {
@@ -55,84 +58,82 @@ class CoinbaseWebSocket {
     handleMessage(data) {
         try {
             const message = JSON.parse(data.toString());
-            switch (message.type) {
-                case 'ticker':
-                    this.handleTickerUpdate(message);
-                    break;
-                case 'subscriptions':
-                    console.log('Received subscriptions confirmation:', JSON.stringify(message));
-                    break;
-                case 'error':
-                    console.error('Received error message:', message);
-                    break;
-                default:
-                    console.log(`Received message: ${JSON.stringify(message)}`);
+            if (message.type === 'ticker') {
+                void this.processTickerUpdate(message);
             }
         }
         catch (error) {
             console.error('Error processing message:', error);
-            console.error('Raw message:', data);
         }
     }
-    async handleTickerUpdate(data) {
+    async processTickerUpdate(data) {
+        const time = new Date(data.time).getTime();
+        if (time <= this.lastTickTime) {
+            return;
+        }
+        this.lastTickTime = time;
         const price = parseFloat(data.price);
         const size = parseFloat(data.last_size);
-        const time = new Date(data.time).getTime();
-        if (!this.currentKline || time >= this.klineStartTime + 60000) {
-            if (this.currentKline) {
-                const completeKline = {
+        const currentMinute = Math.floor(time / 60000) * 60000;
+        if (!this.currentKline || currentMinute > this.klineStartTime) {
+            if (this.processingKline) {
+                console.log('[DEBUG] Waiting for previous kline completion');
+                return;
+            }
+            try {
+                this.processingKline = true;
+                if (this.currentKline) {
+                    console.log(`[DEBUG] Completing kline for ${new Date(this.klineStartTime).toISOString()}`);
+                    const completeKline = {
+                        ...this.currentKline,
+                        exchange: this.EXCHANGE
+                    };
+                    this.klines.unshift(completeKline);
+                    if (this.klines.length > this.MAX_KLINES) {
+                        this.klines.pop();
+                    }
+                    try {
+                        await this.klineService.saveKline(completeKline);
+                        console.log(`Successfully saved kline to DynamoDB for ${completeKline.exchange}:${completeKline.symbol} at ${new Date(completeKline.openTime).toISOString()}`);
+                        this.logKline(completeKline);
+                    }
+                    catch (error) {
+                        if (error instanceof Error && error.name !== 'ConditionalCheckFailedException') {
+                            console.error('Failed to save kline to DynamoDB:', error);
+                        }
+                    }
+                }
+                this.klineStartTime = currentMinute;
+                this.currentKline = {
                     symbol: 'BTC-USD',
                     interval: '1m',
                     openTime: this.klineStartTime,
                     closeTime: this.klineStartTime + 60000,
-                    open: this.currentKline.open,
-                    high: this.currentKline.high,
-                    low: this.currentKline.low,
-                    close: this.currentKline.close,
-                    volume: this.currentKline.volume,
-                    trades: this.currentKline.trades
+                    open: price,
+                    high: price,
+                    low: price,
+                    close: price,
+                    volume: size,
+                    trades: 1
                 };
-                this.klines.unshift(completeKline);
-                this.logKline(completeKline);
-                try {
-                    await this.klineService.saveKline(completeKline);
-                    console.log(`Successfully saved kline to DynamoDB for ${completeKline.symbol} at ${new Date(completeKline.openTime).toISOString()}`);
-                }
-                catch (error) {
-                    console.error('Failed to save kline to DynamoDB:', error);
-                }
-                if (this.klines.length > this.MAX_KLINES) {
-                    this.klines.pop();
-                }
+                console.log(`Started new kline at ${new Date(this.klineStartTime).toISOString()}`);
             }
-            this.klineStartTime = Math.floor(time / 60000) * 60000;
-            this.currentKline = {
-                symbol: 'BTC-USD',
-                interval: '1m',
-                openTime: this.klineStartTime,
-                closeTime: this.klineStartTime + 60000,
-                open: price,
-                high: price,
-                low: price,
-                close: price,
-                volume: size,
-                trades: 1
-            };
-            console.log(`Started new kline at ${new Date(this.klineStartTime).toISOString()}`);
+            finally {
+                this.processingKline = false;
+            }
         }
-        else {
-            if (this.currentKline) {
-                this.currentKline.high = Math.max(this.currentKline.high, price);
-                this.currentKline.low = Math.min(this.currentKline.low, price);
-                this.currentKline.close = price;
-                this.currentKline.volume += size;
-                this.currentKline.trades = (this.currentKline.trades || 0) + 1;
-            }
+        else if (this.currentKline) {
+            this.currentKline.high = Math.max(this.currentKline.high, price);
+            this.currentKline.low = Math.min(this.currentKline.low, price);
+            this.currentKline.close = price;
+            this.currentKline.volume += size;
+            this.currentKline.trades = (this.currentKline.trades || 0) + 1;
         }
     }
     logKline(kline) {
         console.log(`
             Completed Kline:
+            Exchange: ${kline.exchange}
             Symbol: ${kline.symbol}
             Interval: ${kline.interval}
             OpenTime: ${new Date(kline.openTime).toISOString()}

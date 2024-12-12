@@ -1,4 +1,4 @@
-export interface Kline {
+export interface BaseKline {
     symbol: string;
     interval: string;
     openTime: number;
@@ -9,12 +9,16 @@ export interface Kline {
     close: number;
     volume: number;
     trades?: number;
-    timestamp?: number;
 }
 
-export interface KlineRecord extends Kline {
-    id: string;
-    type: 'KLINE';
-    timestamp: number;
+export interface ExchangeKline extends BaseKline {
+    exchange: string;
+}
+
+export interface KlineRecord extends ExchangeKline {
+    pk: string;         // KLine#<exchange>#<symbol>
+    sk: number;         // timestamp (openTime)
+    type: 'KLINE';      // Keeping the type discriminator
+    timestamp: number;  // For GSI if needed
     ttl: number;
 }
