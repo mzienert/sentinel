@@ -72,7 +72,7 @@ const queryTable = async (): Promise<any[]> => {
             ExpressionAttributeValues: {
                 ':type': 'KLINE'
             },
-            Limit: 240
+            Limit: 2
         };
 
         console.log('Scanning table with params:', scanParams);
