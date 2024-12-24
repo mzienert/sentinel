@@ -56,7 +56,7 @@ const queryTable = async () => {
             ExpressionAttributeValues: {
                 ':type': 'KLINE'
             },
-            Limit: 2
+            Limit: 100
         };
         console.log('Scanning table with params:', scanParams);
         const scanResult = await docClient.send(new lib_dynamodb_1.ScanCommand(scanParams));
